@@ -1,7 +1,6 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import {
-  CallToolRequestSchema,
   ClientCapabilities,
   CompleteRequestSchema,
   CreateMessageRequest,
@@ -9,7 +8,9 @@ import {
   ElicitResultSchema,
   GetPromptRequestSchema,
   LoggingLevel,
-  Resource,
+  ContentBlock,
+  BlobResourceContents,
+  TextResourceContents,
   RootsListChangedNotificationSchema,
   ServerNotification,
   ServerRequest,
@@ -237,7 +238,7 @@ export const createServer = () => {
 
   };
 
-  const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
+  const ALL_RESOURCES: ((TextResourceContents | BlobResourceContents) & { name: string })[] = Array.from({ length: 100 }, (_, i) => {
     const uri = `test://static/resource/${i + 1}`;
     if (i % 2 === 0) {
       return {
@@ -271,25 +272,9 @@ export const createServer = () => {
         mimeType: resource.mimeType,
       },
       async () => {
-        // Build the resource contents based on type
-        if ('text' in resource && resource.text) {
-          return {
-            contents: [{
-              uri: resource.uri,
-              mimeType: resource.mimeType,
-              text: resource.text as string,
-            }],
-          };
-        } else if ('blob' in resource && resource.blob) {
-          return {
-            contents: [{
-              uri: resource.uri,
-              mimeType: resource.mimeType,
-              blob: resource.blob as string,
-            }],
-          };
-        }
-        throw new Error(`Resource ${resource.uri} has neither text nor blob`);
+        return {
+          contents: [resource],
+        };
       }
     );
   }
@@ -307,24 +292,9 @@ export const createServer = () => {
 
       if (index >= 0 && index < ALL_RESOURCES.length) {
         const resource = ALL_RESOURCES[index];
-        // Build the resource contents based on type
-        if ('text' in resource && resource.text) {
-          return {
-            contents: [{
-              uri: resource.uri,
-              mimeType: resource.mimeType,
-              text: resource.text as string,
-            }],
-          };
-        } else if ('blob' in resource && resource.blob) {
-          return {
-            contents: [{
-              uri: resource.uri,
-              mimeType: resource.mimeType,
-              blob: resource.blob as string,
-            }],
-          };
-        }
+        return {
+          contents: [resource],
+        };
       }
 
       throw new Error(`Unknown resource: ${uri.href}`);
@@ -531,7 +501,7 @@ export const createServer = () => {
     },
     async (args) => {
       const { messageType, includeImage } = args;
-      const content: any[] = [];
+      const content: ContentBlock[] = [];
 
       // Main message with different priorities/audiences based on type
       if (messageType === "error") {
@@ -589,7 +559,7 @@ export const createServer = () => {
     },
     async (args) => {
       const { count } = args;
-      const content: any[] = [];
+      const content: ContentBlock[] = [];
 
       // Add intro text
       content.push({
@@ -710,7 +680,7 @@ export const createServer = () => {
           },
           {
             type: "resource" as const,
-            resource: resource as any,
+            resource: resource as TextResourceContents | BlobResourceContents,
           },
           {
             type: "text" as const,
@@ -864,7 +834,7 @@ export const createServer = () => {
       }, ElicitResultSchema, { timeout: 10 * 60 * 1000 /* 10 minutes */ });
 
       // Handle different response actions
-      const content: any[] = [];
+      const content: ContentBlock[] = [];
 
       if (elicitationResult.action === 'accept' && elicitationResult.content) {
         content.push({
