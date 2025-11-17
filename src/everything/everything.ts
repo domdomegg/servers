@@ -257,9 +257,46 @@ export const createServer = () => {
     }
   });
 
-  // Register resource using modern API with a template pattern
+  // Register all 100 resources individually
+  for (let i = 0; i < ALL_RESOURCES.length; i++) {
+    const resource = ALL_RESOURCES[i];
+    const resourceId = i + 1;
+
+    server.registerResource(
+      `static-resource-${resourceId}`,
+      resource.uri,
+      {
+        name: resource.name,
+        description: `Resource ${resourceId}: ${resource.mimeType === "text/plain" ? "plaintext resource" : "binary blob resource"}`,
+        mimeType: resource.mimeType,
+      },
+      async () => {
+        // Build the resource contents based on type
+        if ('text' in resource && resource.text) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              text: resource.text as string,
+            }],
+          };
+        } else if ('blob' in resource && resource.blob) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              blob: resource.blob as string,
+            }],
+          };
+        }
+        throw new Error(`Resource ${resource.uri} has neither text nor blob`);
+      }
+    );
+  }
+
+  // Also register a template for the same pattern to support dynamic access
   server.registerResource(
-    'static-resources',
+    'static-resources-template',
     new ResourceTemplate('test://static/resource/{id}', { list: undefined }),
     {
       description: 'A static test resource with a numeric ID',
